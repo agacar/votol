@@ -1,0 +1,55 @@
+yaml
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu çek
+        uses: actions/checkout@v4
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Android SDK cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Gradle izni ver
+        run: chmod +x gradlew
+
+      - name: Keystore dosyasını oluştur
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/votol.keystore
+
+      - name: Release APK derle ve imzala
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=votol.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+        working-directory: app
+
+      - name: APK'yı yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: VotolController-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
